@@ -1,0 +1,310 @@
+---
+title: "rmd_live_code"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Live Code!
+
+This is live! Meaning anytime we save this file, it will appear online in a plain text format, [**here**](https://dl.dropboxusercontent.com/s/fbcybzmhb7phgph/r4wrds_live_rmd.Rmd?dl=0).
+
+Notes to ourselves about what we are doing. **Bold**, *italic*
+
+```{r libraries}
+
+# code as we would normally do in R script
+library(here)
+library(sf)
+library(dplyr)
+library(readr)
+library(viridis)
+library(ggplot2)
+library(USAboundaries)
+library(rnaturalearth)
+library(GSODR)
+library(cowplot)
+library(mapview)      # interactive maps!
+mapviewOptions(fgb = FALSE)
+
+```
+
+Now let's load some data. 
+
+```{r}
+
+# get USA states, filter out Puerto Rico, Alaska, and Hawaii for now
+us <- USAboundaries::us_boundaries(type = "state", resolution = "low") %>% 
+  filter(!state_abbr %in% c("PR", "AK", "HI"))
+
+# get CA boundary with high definition
+ca <- USAboundaries::us_states(resolution = "high", states = "CA")
+
+# make a box around CA (a grid with an n=1) for inset
+ca_box <- st_make_grid(ca, n = 1)
+
+# get crs
+st_crs(ca_box)$epsg
+
+# get CA county boundary
+ca_co <- USAboundaries::us_counties(resolution = "high", states = "CA")
+
+# mapview(ca_box) # quick check that it worked
+# mapview of two obj
+# mapview(ca_box) + mapview(ca)
+
+# make sure we have all the pieces with a quick test plot
+# check they all have same crs:
+library(purrr)
+map(list(us, ca, ca_co), ~st_crs(.x)$epsg)
+
+# make a map
+plot(us$geometry) # every time this will make a fresh map
+plot(ca$geometry, add = TRUE, col = "gray50", border = "maroon")
+plot(ca_co$geometry, add = TRUE, border = "pink", col = NA)
+plot(ca_box, add = TRUE, border = "red3", col = NA, lwd = 2)
+
+
+```
+
+## Reading in Spatial Data in R
+
+```{r}
+
+# can do this iteratively
+sac_co <- st_read(here("data/shp/sac/sac_county.shp"))
+
+mapview(sac_co)
+
+```
+
+What about with geopackages?
+We can look and see what layers exist in these spatial databases with `st_layers`
+
+```{r gpkg}
+
+gpkg <- here("data/sacramento_gsod.gpkg")
+
+st_layers(gpkg)
+
+gpkg_sj <- here("data/san_joaquin_gsod.gpkg")
+st_layers(gpkg_sj)
+
+```
+
+## Visualize
+
+
+```{r}
+
+climdata_sac <- st_read(dsn = gpkg, 
+                        layer = "sacramento_isd_data")
+
+climdata_isd_pts <- st_read(dsn = gpkg, 
+                            layer = "sacramento_isd_pts")
+
+mapview(climdata_isd_pts)
+
+```
+
+Now we can make a plot data tied to a spatial point:
+
+```{r}
+# MONTHLY AVG:
+clim_month <- climdata_sac %>% 
+  filter(!is.na(PRCP)) %>% # filter out missing data
+  filter(!is.na(TEMP)) %>% 
+  group_by(NAME, STNID, MONTH) %>% 
+  summarize(
+    across(c("TEMP","PRCP"), list(min = min, mean = mean, max = max))
+  ) %>% 
+  ungroup()
+
+# monthly prcp
+(mPPT <- ggplot() + 
+  geom_col(data = clim_month, 
+           aes(x = MONTH, y = PRCP_mean,
+               fill = PRCP_mean), show.legend = T) +
+  theme_minimal() + 
+  labs(y = "", x = "") +
+  scale_x_continuous(breaks = c(1, 4, 7, 10),
+                     labels = c("Jan", "Apr", "Jul", "Oct")) +
+  theme(plot.background = element_blank(),
+        legend.position = "left",
+        #legend.position = c(-0.25, 0.55),
+        legend.key.height = unit(.15, units = "in"),
+        legend.key.width = unit(.1, units = "in"), 
+        panel.border = element_blank(),
+        axis.text.y = element_blank(),
+        plot.margin = unit(c(0, 0, 0 ,0), "mm")) +
+  scale_fill_viridis_c("Mean \nPPT(in)") +
+  labs(subtitle = "Monthly Mean Precipitation (1960-2020)",
+       caption = 
+         "Data from the {GSODR} package: https://ropensci.github.io/GSODR/")+
+  coord_polar() + 
+  facet_wrap(clim_month$NAME~., nrow = 1))
+
+
+```
+
+
+# Spatial Joins
+
+```{r}
+
+# groundwater level data from stations in sacramento
+gwl_sac <- read_csv("data/gwl/gwl_sac.csv")
+
+# make spatial
+gwl_sac <- gwl_sac %>% 
+  st_as_sf(coords = c("LONGITUDE", "LATITUDE"), 
+           crs = 4326, remove = FALSE)  
+
+mapview(gwl_sac) # this may take a minute because of duplication
+
+# make a distinct stations dataset
+gwl_sac_stations <- gwl_sac %>% 
+  select(SITE_CODE, WLM_GSE, contains("DESC"), WELL_NAME:COUNTY_NAME) %>% 
+  distinct(.keep_all = TRUE)
+
+mapview(gwl_sac_stations, zcol="WLM_DESC")
+st_crs(gwl_sac_stations)$epsg
+```
+
+## Bring Census Tract data for CalEnviroscreen
+
+```{r}
+
+ces <- st_read(here("data/calenviroscreen/CES3_shp/CES3June2018Update.shp"))
+st_crs(ces)$epsg # diff proj
+mapview(ces)
+
+
+```
+
+## Crop The Data to Sacramento
+
+Need to reproject data (transform) before we an do spatial operations.
+
+```{r}
+# transform to 3310 to match
+gwl_sac_stations_3310 <- st_transform(gwl_sac_stations, st_crs(ces))
+st_crs(gwl_sac_stations_3310)
+st_crs(gwl_sac_stations_3310) == st_crs(ces)
+
+# get county and crop
+gpkg <- here("data/sacramento_gsod.gpkg")
+st_layers(gpkg)
+sac_co <- st_read(gpkg, layer = "sacramento_isd_cnty") %>% 
+  st_transform(3310)
+st_crs(sac_co)
+
+# now crop the CES data by the sacramento co polygon
+ces_sac <- st_intersection(ces, sac_co) # x, y
+
+mapview(ces_sac)
+```
+
+Select points that only fall within certain tract?
+
+```{r}
+#tract number: 6077004001
+ces_detail <- ces_sac %>% 
+  filter(tract == 6077004001)
+mapview(ces_detail, col.regions="yellow") + mapview(ces_sac) +
+  mapview(gwl_sac_stations, col.regions="orange")
+
+```
+
+
+
+```{r}
+
+# load the isd_history file (which ships with {GSODR}):
+load(system.file("extdata", "isd_history.rda", package = "GSODR"))
+
+# make spatial
+isd_history <- as.data.frame(isd_history) %>% 
+  st_as_sf(coords = c("LON", "LAT"), crs = 4326, remove = FALSE)  
+
+# filter to US and CA, many sites out in buoys along coast
+isd_history_ca <- dplyr::filter(isd_history, CTRY == "US", STATE == "CA")
+
+# get specific counties
+ca_co_select <- ca_co %>% filter(name %in% 
+                                   c("Sacramento",
+                                     "San Joaquin", 
+                                     "Sutter"))
+
+# check CRS is the same
+identical(st_crs(ca_co_select)$epsg, st_crs(isd_history)$epsg)
+
+
+```
+
+
+```{r}
+# view!
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+# get countries
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# plot
+plot(isd_history$geometry, pch = 16, cex = 0.2, col = "gray50")
+plot(world$geometry, add = T, border = "gray10")
+plot(ca$geometry, col = "maroon", add = TRUE)
+title("GSOD Climate Stations")
+```
+
+## SPATIAL JOINS
+
+```{r}
+
+# SPATIAL JOIN: Get CA county POLYGONS that contain ISD points 
+# does not bring attributes from points forward
+ca_co_isd_poly <- ca_co_select[isd_history_ca, ]
+
+# anti_join: find counties that don't contain ISD points
+ca_co_poly_anti <- ca_co[!lengths(st_intersects(ca_co, isd_history_ca)), ]
+
+# plot of all CA counties with and without ISD stations
+plot(ca_co$geometry, col = alpha("gray70", 0.3))
+#plot(ca_co_select$geometry, col = alpha("gray", 0.3))
+plot(ca_co_poly_anti$geometry, col = alpha("purple", 0.3), add = TRUE)
+plot(ca_co_isd_poly$geometry, col = alpha("forestgreen", 0.6), add = TRUE)
+plot(isd_history_ca$geometry, add = T, pch = 21, bg = "yellow", 
+     cex = 0.5, col = "black")
+title("Counties with GSOD ISD Stations (green)\n No Stations (purple)")
+
+
+isd_select <- st_join(isd_history_ca, ca_co_isd_poly[,"countyfp"], left = FALSE)
+
+# how to add attributes
+
+mapview(isd_select, zcol = "name", layer.name = "County") +
+  mapview(ca_co_isd_poly, alpha = 0.5, legend = FALSE)
+
+```
+
+
+
+# DataRetrieval Package
+
+```{r}
+library(dataRetrieval)
+# library(nhdplusTools)
+
+all_nldi <- findNLDI(location =c(-121.418, 38.555),
+                          nav  = c("DM"), 
+                          find = c("nwis", "flowlines", "basin"))
+
+        
+                                  
+```
+
