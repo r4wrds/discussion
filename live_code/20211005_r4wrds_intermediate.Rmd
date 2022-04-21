@@ -1,0 +1,268 @@
+---
+title: "rmd_live_code"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Live Code!
+
+This is live! Meaning anytime we save this file, it will appear online in a plain text format, [**here**](https://dl.dropboxusercontent.com/s/fbcybzmhb7phgph/r4wrds_live_rmd.Rmd?dl=0).
+
+Previous versions can be found [here](https://www.github.com/r4wrds/discussion/main/live_code/).
+
+
+## Installing Packages that aren't on CRAN
+
+```{r, eval=FALSE, echo=TRUE}
+
+# need to install devtools
+install.packages("devtools")
+library(devtools)
+# then packages like urbanmapr
+devtools::install_github("UrbanInstitute/urbnmapr")
+
+```
+
+
+## Load Libraries
+
+Make sure to load libraries. 
+
+```{r, message=FALSE}
+
+# GENERAL PACKAGES
+library(here) # path management
+library(tidyverse) # data wrangling & viz
+library(purrr) # iteration
+library(janitor) # name cleaning
+library(glue) # pasting stuff together
+library(here) # file paths
+
+# SPATIAL PACKAGES
+library(sf) # analysis tools
+library(mapview)  # interactive maps!
+mapviewOptions(fgb = FALSE) # to save interactive maps
+# devtools::install_github("UrbanInstitute/urbnmapr")
+library(urbnmapr) # county & state boundaries
+library(units) # for convert spatial and other units
+library(dataRetrieval) # download USGS river data
+library(tmap) # mapping
+library(tmaptools) 
+
+```
+
+## Import Spatial Data and Project
+
+```{r}
+
+# get CA
+ca <- urbnmapr::get_urbn_map(map="states", sf=TRUE) %>% 
+  filter(state_abbv == "CA")
+# warning is ok!
+
+# get CA county boundary
+ca_co <- urbnmapr::get_urbn_map(map = "counties", sf=TRUE) %>% 
+  filter(state_abbv == "CA")
+
+st_crs(ca_co)$epsg
+
+# shapefile
+sac_co <- sf::st_read(here("data/shp/sac/sac_county.shp"))
+
+# preview
+mapview(sac_co)
+
+# check CRS (coord ref system)
+st_crs(sac_co)$epsg
+st_transform(sac_co, 4326)
+
+# to transform from another spatial datast
+sac_co <- st_transform(sac_co, st_crs(ca_co))
+st_crs(sac_co)$epsg
+
+# check CRS are the same
+st_crs(sac_co) == st_crs(ca_co) 
+
+```
+
+
+## Visualize: Interactive 
+
+```{r}
+
+sac_box <- st_make_grid(sac_co, n=1)
+
+sac_grid_10 <- st_make_grid(sac_co, n=10, square = FALSE)
+
+mapview(sac_box) + mapview(sac_grid_10) +
+  mapview(sac_co, color="orange", lwd=2)
+
+
+```
+
+## Static Map with Base `plot()`
+
+```{r}
+# if we don't specify the geometry, base plot will plot 
+# a map for every attribute (columns) in dataset
+# plot(ca_co)
+plot(ca_co$geometry)
+
+# make it more fancy
+# make sure we have all the pieces with a quick test plot
+plot(ca$geometry, col = alpha("gray", 0.5), border = "black", lwd=2)
+
+# try sac co by itself
+#plot(sac_co$geometry, border = "cyan4", col = "skyblue",alpha=0.4, lwd = 2)
+
+# add layers, need to use add = TRUE
+plot(ca_co$geometry, add = TRUE, border = "purple", col = NA)
+plot(sac_co$geometry, add = TRUE, border = "cyan4", col = "skyblue",alpha=0.4, lwd = 2)
+plot(sac_box, add = TRUE, border = "orange", col = NA, lwd = 1.4)
+plot(sac_grid_10, add = TRUE, border = "green", col = NA, lwd = 0.5)
+
+```
+
+
+## Check Projections
+
+```{r}
+
+# iterate through and check CRS
+map(list(ca_co, ca, sac_co), ~st_crs(.x)$epsg)
+
+
+```
+
+## Iteration and Intersection
+
+```{r}
+# read the stations
+gw_files <- list.files(path = here("data/gwl/county"),
+                       full.names = TRUE, pattern = "*.csv")
+gw_files
+
+# read all files into dataframes and combine with purrr
+gw_df <- map_df(gw_files, ~read.csv(.x))
+
+table(gw_df$COUNTY_NAME)
+
+# the readr package will also do this same thing by default
+# when passed a list of files:
+# needs to be csvs with same data types and column number
+gw_df <- readr::read_csv(gw_files)
+
+gw_df <- st_as_sf(gw_df, coords = c("LONGITUDE", "LATITUDE"), crs=4326, remove=TRUE) %>% 
+  st_transform(., st_crs(ca_co))
+
+class(gw_df)
+
+# preview!
+mapview(gw_df, zcol="COUNTY_NAME", layer.name="GW Stations") +
+  mapview(sac_co, legend=FALSE)
+
+```
+
+## Spatial Intersection
+
+We can use [] to subset or crop our data spatially.
+
+```{r}
+# gw_df[, ] # access dataframe with [row, column]
+
+gw_sac_join1 <- gw_df[sac_co, ]
+
+table(gw_sac_join1$COUNTY_NAME)
+
+# interestingly, the county boundaries don't line up
+mapview(gw_sac_join1, zcol="COUNTY_NAME") + mapview(sac_co, color="orange") + mapview(ca_co, col.regions="gray")
+
+```
+
+```{r}
+
+# st_join adds the attributes from the "y" object 
+# to the x object
+gw_sac_join2 <- st_join(gw_df, sac_co, left=FALSE)
+
+
+```
+
+
+## Getting River Data
+
+Use GW Sac as example
+
+```{r}
+
+sac_loi <- gw_sac_join1 %>% filter(STN_ID %in% c("52418", "5605"))
+mapview(sac_loi)
+
+# this package pulls flowline/basin/WQ data points
+library(dataRetrieval)
+st_crs(sac_loi)$epsg
+
+sac_loi <- st_transform(sac_loi, 4326)
+
+# now we can go get flowline data!
+us_nwis <- map(sac_loi$geometry,
+                ~findNLDI(location = .x,
+                          nav  = c("UM"), # UT, DM, DD 
+                          find = c("nwis", "flowlines"),
+                          distance_km = 100))
+
+names(us_nwis)
+
+us_nwis <- set_names(us_nwis, nm=glue("id_{sac_loi$STN_ID}"))
+
+# more iteration to combine flowlines and WQ sites
+us_flowlines <- map_df(us_nwis, ~rbind(.x$UM_flowlines))
+us_nwissite <- map_df(us_nwis, ~rbind(.x$UM_nwissite))
+
+mapview(sac_loi, col.region="purple", legend = TRUE, 
+        cex=3, layer.name="GW LOI") +
+  mapview(us_nwissite, col.regions="orange", 
+          legend = TRUE, layer.name="UM NWIS Sites") +
+  mapview(us_flowlines, color="steelblue", lwd=2, 
+          layer.name="UM Flowlines", legend=FALSE)
+
+```
+
+## Pull River Data 
+
+```{r}
+# site: 11446500
+
+# see if there's daily discharge/wtemperature data available ("dv"):
+dataRetrieval::whatNWISdata(siteNumber = "11446500",
+                            service = "dv", 
+                            parameterCd = c("00060", "00010"),
+                            statCd = "00003")
+
+
+## get that data
+usgs_Q <- readNWISdv("11446500", 
+                parameterCd = "00060", 
+                startDate = "2016-10-01") %>% 
+  renameNWISColumns()
+
+# plot:
+# if weird error, can try dev.off() to reset graphics device in R
+library(ggplot2)
+(hydro <- ggplot() + 
+   geom_line(data = usgs_Q, aes(x = Date, y = Flow, col = site_no),
+             size = .5) + 
+   #scale_color_brewer(palette = "Set1") +
+   #facet_wrap(~site_no, scales = "free_x") + 
+   theme_classic() + 
+   labs(title="USGS Discharge Data",
+        x="", y="Discharge (cfs)") +
+   theme(legend.position = "none"))
+
+```
+
