@@ -1,0 +1,218 @@
+---
+title: "rmd_live_code"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Live Code!
+
+This is live! **Meaning** anytime we save this file, it will appear online in a plain text format, [**here**](https://dl.dropboxusercontent.com/s/fbcybzmhb7phgph/r4wrds_live_rmd.Rmd?dl=0).
+
+Previous versions can be found [here](https://github.com/r4wrds/discussion/tree/main/live_code).
+
+## Load Libraries We Need
+
+```{r libraries, echo=TRUE}
+
+library(sf)
+library(here)
+library(tidyverse)
+library(mapview)
+mapviewOptions(fgb = FALSE)
+
+```
+
+## Read in Shapefile
+
+We read in a shapefile here, notice different ways to specify the path, remember ".." means go UP a directory.
+
+```{r getSacshp}
+
+sac <- st_read(here("data/shp/sac_county_shp/sac_county.shp"))
+
+# weird things with Rmarkdown documents, is the home directory or path 
+# defaults to WHERE the RMD LIVES.
+sac <- st_read("data/shp/sac_county_shp/sac_county.shp", quiet=TRUE)
+
+# to go UP a directory (or folder) we can use the ".."
+# "../data/shp/sac_county_shp/sac_county.shp"
+
+```
+
+## Read in CSV and Make into {sf} Object
+
+```{r}
+
+# read in a csv, groundwater level stations from Sac county
+stations <- read_csv(here("data/gwl/stations.csv"))
+
+# check the class of the data
+class(sac)
+# since it's an sf object, can plot the geometry
+# plot(sac) # avoid plotting many times over
+plot(sac$geometry)
+
+
+# what about the csv?
+class(stations)
+
+# convert into sf object (adding a "geometry" column to dataframe)
+stations <- st_as_sf(stations, 
+                     # coords requires X then Y, must be quoted
+                     coords = c("LONGITUDE", "LATITUDE"),
+                     # then we need a projection
+                     crs = 4269,
+                     # DON'T remove the LONGITUDE and LATITUDE columns
+                     remove = FALSE)
+
+# IF you get an error about NA, need to check and remove the NAs from the data FIRST, then use st_as_sf
+summary(stations) # where there are NAs
+# then can use dplyr::filter(!is.na(LATITUDE))
+
+plot(stations$geometry, pch=16, col="steelblue", cex=0.3)
+
+```
+
+## Projections and Coordinate Reference Systems (CRS)
+
+What are they? How do I use them?
+
+```{r crs}
+
+# check projection with sf::st_crs
+st_crs(sac)
+st_crs(sac)$epsg # the code the tells everything
+
+
+# check both data pieces
+st_crs(stations)$epsg
+
+# check if identical:
+identical(st_crs(stations), st_crs(sac))
+
+# TO TRANSFORM 
+sac <- st_transform(sac, crs = 4269)
+# can even use crs from another object in R
+sac <- st_transform(sac, crs = st_crs(stations))
+
+identical(st_crs(stations), st_crs(sac))
+
+# can make many projections easily and switch between them.
+#sac_4269
+#sac_diff_proj
+
+```
+
+## Intersecting or Cropping Data
+
+Spatial joining or intersecting is a powerful way to merge or combine data, when only want the spatial overlap (or not).
+
+```{r intersection}
+
+class(stations)
+# intersection WON'T work if objects not in the same projection
+stations_sac_intersection <- st_intersection(stations, sac)
+# spatial warning about "not spatially constant" is ok!
+# can remove or avoid by using a better projection
+
+table(stations_sac_intersection$COUNTY_NAM)
+plot(stations_sac_intersection$geometry)
+plot(sac, border = "gray", col="transparent", add=TRUE)
+
+
+```
+
+`st_intersection()` is useful in that it joins the data and adds the attributes from one dataset to the matching spatial components in the other dataset. If we want to spatially crop data, but **not** join/bring the additional attributes in, we can use a different approach.
+
+```{r}
+
+# using a spatial join without adding attributes
+stations_sac <- stations[sac, ]
+
+```
+
+# Mapping and Visualization
+
+## Mapview
+
+```{r mapview}
+
+library(mapview)
+mapviewOptions(fgb = FALSE)
+
+# make sacramento polygon transparent and thicker outliner
+mapview(sac, alpha.regions=0, col.regions="orange", color = "orange", 
+        lwd=4, layer.name="Sacramento County") + 
+  mapview(stations_sac, zcol="WELL_DEPTH", layer.name="Well Depth (ft)")
+  # many layers can be added
+
+# what about other variables to map color too...with "zcol="
+table(stations_sac$WELL_USE)
+table(stations_sac$WELL_TYPE)
+
+# WELL_TYPE
+# mapview(sac, alpha.regions=0, col.regions="orange", color = "orange",
+#         lwd=4, layer.name="Sacramento County") +
+#   mapview(stations_sac, zcol="WELL_TYPE", layer.name="Well Type", col.regions=brewer.pal(9, "YlGn"))
+
+# WELL_USE
+# may need to install.packages("RColorBrewer")
+mapview(sac, alpha.regions=0, col.regions="orange", color = "orange", 
+        lwd=4, layer.name="Sacramento County") + 
+  mapview(stations_sac, zcol="WELL_USE", layer.name="Well Use", col.regions=RColorBrewer::brewer.pal(7, "YlGn")) +
+  mapview(stations_sac, zcol="WELL_USE", layer.name="Well Use Viridis")
+
+
+```
+
+## Using Static Mapping Options with {ggplot2}
+
+
+```{r simpleMap1}
+
+ggplot() + 
+  geom_sf(data = sac) +
+  geom_sf(data = stations_sac)
+
+fs::dir_create("figures")
+ggsave("figures/basic_gwl_station_map_ggplot.png", width = 6, height = 8,
+       dpi=300)
+
+```
+
+```{r fancyMaps}
+
+ggplot() + 
+  geom_sf(data = sac) +
+  geom_sf(data = stations_sac, color="steelblue", alpha=0.5) +
+  labs(x = "Longitude (NAD83)", y = "Latitude", 
+       title = "Groundwater monitoring stations",
+       subtitle = "for Sacramento County") +
+  theme_minimal()
+
+# handy package to add north arrow or scale bar:
+# install.packages("ggspatial")
+library(ggspatial)
+
+p1 <- ggplot() + 
+  geom_sf(data = sac) +
+  geom_sf(data = stations_sac, color="steelblue", alpha=0.5) +
+  labs(x = "Longitude (NAD83)", y = "Latitude", 
+       title = "Groundwater monitoring stations",
+       subtitle = "for Sacramento County") +
+  theme_minimal() +
+  ggspatial::annotation_north_arrow(location="tl") +
+  ggspatial::annotation_scale(location="br")
+
+p1
+
+ggsave(plot = p1, filename = "figures/fancy_gwl_station_map_ggplot.png",
+       width = 6, height = 8, bg = "white", dpi=300)
+
+```
+
