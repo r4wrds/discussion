@@ -1,4 +1,4 @@
-# Live Code for 2023-01-23 R4WRDS Course
+# Live Code for R4WRDS Course
 
 # As we type code, it will update here (each time we save).
 # Refresh your browser to get most updated code.
@@ -7,270 +7,224 @@
 
 # live code link: https://dl.dropboxusercontent.com/s/tuonv1w7ehw3gkn/r4wrds_r_live_code.R?dl=0
 
-# Welcome to the Intro Course! (2023-01-25)
+# Welcome to the Intro Course! (2023-01-23)
 
-# Check your working directory with
-getwd()#
+# Good Morning
 
-# load in our packages
-library(readr)
-library(ggplot2)
+# lets try some live code and check packages
+c( "tidyverse", "sf", "viridis", "mapview" ) %in% installed.packages()
 
-# read in data
-gwl10 <- read_csv("data/gwl/gwl_10.csv")
-# dimensions
-dim(gwl10)
-colnames(gwl10)
-# index columns with $, index = extract one item
-gwl10$SITE_CODE
-# MSMT DATE: measurement date
-# WSE: water surface elevation
-# GSE_WSE - depth to groundwater
+# typing things after a # sign is a comment, that won't be evaluated
+# to change panels, use Tools > Global Options > Pane Layout
 
-# indexing = extracting an item, $ for column, [#]
-gwl10$WELL_USE[100:150]
-# second indexing approach: dataframe[row,column]
-# columns 1-5, rows 1-10
-gwl10[1:10,1:5]
-# why index? work with more specific parts of the data
-indexed_data <- gwl10[1:10, 1:5]
+print("Hello")
 
-# 3 core of a ggplot: 1) data, 2) geometric shape, 3) aesthetic mapping
+# R can be used like a calculator (very fancy)
+8 / 4
+10 / 3
 
-ggplot(data = gwl10) +
-  geom_point(mapping = aes(x = MSMT_DATE, y = GSE_WSE), alpha = 0.5, color = "violet")
+# for a list of things
+c(4, 6)
 
-# geom_point: continuous x continuous (same with geom_line)
-# histograms: 1 cont.
-ggplot(gwl10) +
-  geom_histogram(aes(x = GSE_WSE))
-# default is 30 bins
-ggplot(gwl10) +
-  geom_histogram(aes(x = GSE_WSE), bins = 100)
+8 * 5
+9 / 5 + 32 - (45-2) / ((2/5)*2)
 
-# Our trend is not quite clear: why?
-ggplot(gwl10) +
-  # put data attributes inside aes argument
-  geom_point(aes(x = MSMT_DATE, y = GSE_WSE, color = SITE_CODE), alpha = 0.5)
+# create variable names
 
-# boxplots: distributions categorical x cont.
-# load in tidyverse to get a wider set of packages and functions
-library(tidyverse)
-# use fct_order() function WITHIN ggplot to reorder variables by the median
-ggplot(gwl10) +
-  #boxplots show us the median (center line), the inter-quartile range within the box, and the whiskers (<1.5x IQ range), with the outliers as points (>1.5x IQ range)
-  geom_boxplot(aes(x = GSE_WSE, y = fct_reorder(SITE_CODE, GSE_WSE), color = WELL_USE)) +
-  # add labels
-  labs(x = "Depth to groundwater (ft)",
-       y = "Site", color = "Well type",
-       title = "Depth to groundwater at 10 sites",
-       subtitle = "Sacramento and Placer county (1960-present")
+stream <- 120
 
-# Sub-plots: facets: facet_wrap
-ggplot(gwl10) +
-  geom_line(aes(MSMT_DATE, GSE_WSE)) +
-  facet_wrap(~SITE_CODE, ncol = 2, scales = "free")
-?facet_wrap
+# strm <- 120 # oops!
 
-# Color
-library(viridis)
-ggplot(gwl10) +
-  geom_line(aes(MSMT_DATE, GSE_WSE, color = WELL_USE)) +
-  facet_wrap(~SITE_CODE, ncol = 2, scales = "free") +
-  scale_color_viridis_d() # _d discrete/categorical
+pebble <- 8
 
-colnames(gwl10)
-my_plot <- ggplot(gwl10) +
-  geom_line(aes(MSMT_DATE, GSE_WSE, color = WELL_DEPTH)) +
-  facet_wrap(~SITE_CODE, ncol = 2, scales = "free") +
-  # If you mismatch _d with a continuous color variable, you will get an error
-  scale_color_viridis_c() # _c continuous
+lake <- 10
 
-# Notes: 
-## warnings are okay (usually), they just tell you something is up
-# errors are more serious (something went wrong and cannot run)
-## Tidyverse warning of conflicts: this is okay, but it tells you about how some packages have function with the same names
+# using help for a popup, use F1
+# LakeHuron
 
+# this breaks because it starts with a number
+# 8stream <- 8
+
+stream + pebble - lake
+Stream + pebble # case sensitive
+strm + pebble # spelling sensitive
+
+# how to remove a value?
+
+rm(strm, lake, pebble, stream)
+
+# Project Management
+
+
+
+# to add a section header to your code or script, use Ctrl + Shift + R
+# or Code > Insert Section
+
+# Section Headers ---------------------------------------------------------
+
+
+# Downloading Data --------------------------------------------------------
+
+# two options to get data into your R project
+dir.create("data")
+
+# now let's download some data
+# downloads the file (data.zip) to your data directory
+download.file(url = "https://github.com/r4wrds/r4wrds-data-intro/raw/main/data.zip", destfile = "data/data.zip")
+
+# soft wrap of source file is when you type a really long line or have a really long line of code that is way too long
+
+getwd() # get the current working directory
+
+unzip(zipfile = "data/data.zip")
+
+# setwd() should be avoided
+
+
+# Making Directories ------------------------------------------------------
+
+# can do with code
+dir.create("docs")
 dir.create("figures")
-# defaults a width and height that is the size of your viewer pane
-ggsave("figures/my_plot_ggsave.pdf", my_plot)
-# specify dimensions we want
-?ggsave
-ggsave("figures/my_plot_ggsave.pdf", my_plot, height = 10, width = 6)
 
-# rows ~ column
-?facet_grid
-# facet_grid: facet by two variables
-ggplot(gwl10) +
-  geom_line(aes(MSMT_DATE, GSE_WSE, color = WELL_USE, group = SITE_CODE)) +
-  facet_grid(COUNTY_NAME~WELL_USE, scales = "free") +
-  theme_minimal() +
-  # theme function allows you to change positions of just about anything in the plot
-  theme(legend.position = "top")
+# or use the buttons in Files tab
+
+# Testing livecode
 
 
+# Reading in data ---------------------------------------------------------
 
-# 7. dplyr ----------------------------------------------------------------
-
-install.packages("cowsay")
-cowsay::say("hello")
-
+# install.packages()... only need to do this once
 library(tidyverse)
 
-# tidyverse, by default, loads dplyr
-
-# load groundwater stations data
+?read_csv
+# ask R where you are in your computer: you should be in your project folder
+getwd()
+# read_csv function to read in csv (comma separated values) files
+# arguments go inside the parentheses
 stations <- read_csv("data/gwl/stations.csv")
 
+# data frame is a common class for data
+class(stations)
 
-# filter() rows -----------------------------------------------------------
+# initially inspecting data with...
+head(stations) # glance
+nrow(stations) # number of rows
+ncol(stations) # number of columns
+dim(stations) # dimensions
+View(stations)
 
-# how many rows are in the stations dataframe
-nrow(stations)
+# indexing data: pulling columns and rows
+colnames(stations)
+# $ to index columns
+stations$WELL_TYPE
+# use [] to index rows in column
+stations$WELL_TYPE[1]
+stations$WELL_TYPE[1:10] # : means range
 
-# sorted vector of county names
-sort(unique(stations$COUNTY_NAME))
+# Excel sheets
+library(readxl)
+ces <- read_xlsx("data/calenviroscreen/ces3results.xlsx")
 
-# return the rows in Sacramento county
-stations_sac <- filter(stations, COUNTY_NAME == "Sacramento")
-nrow(stations_sac)
+# Error = function did not work
+# Warning = may or may not have done what you expected
 
-# tabulate (count) all the unique values of a column
-# in a dataframe with the table() function
-table(stations_sac$WELL_USE)
+dim(ces)
+head(ces)
 
-# quick aside on $ operator: dollar sign operator allows
-# access to a **column** in a **dataframe**
-class(stations_sac)           # dataframe
-class(stations_sac$WELL_USE)  # column in a dataframe
-head(stations_sac$WELL_USE)   # column in a dataframe
+?read_xlsx
+# commas separate arguments 
+# order matters when you don't specify argument
+metadata <- read_xlsx(skip = 6, path = "data/calenviroscreen/ces3results.xlsx", sheet = 2)
+head(metadata)
 
-# we anticipate 76 rows in the resulting dataframe after
-# filtering by County Sacramento and well use Residential
-stations_sac <- filter(stations, COUNTY_NAME == "Sacramento", WELL_USE == "Residential")
+# argument out of order without specification throw error
+#metadata <- read_xlsx(6, "data/calenviroscreen/ces3results.xlsx", 2)
 
-# let's further convince ourselves this works:
-unique(stations_sac$COUNTY_NAME)
-unique(stations_sac$WELL_USE)
+# shp files
+library(sf)
 
-# yay filter() works!
+# need to unzip first
+#st_read("data/shp/sac_county.zip")
 
-# filter by multiple values with %in% operator
-# (because the == operator is for one value)
-# first create a string vector with the c() operator
-sep_counties <- c("Sacramento", "El Dorado", "Placer")
-sep_multcounties <- filter(stations, COUNTY_NAME %in% sep_counties)
+?unzip
+library(here)
+here()
+# Make sure you specify the directory to extract the files to
+unzip("data/shp/sac_county.zip", exdir = "data/shp/sac")
 
-# convince ourselevs it works
-unique(sep_multcounties$COUNTY_NAME)
-table(sep_multcounties$COUNTY_NAME)
-
-# to negate, use the ! operator (means not equal to)
-stations_trim <- filter(stations, COUNTY_NAME != "Yolo")
-
-
-# select() columns from a dataframe ---------------------------------------
-
-# select 4 columns from the dataframe by colname
-stations_sel1 <- select(stations, c(STN_ID, LATITUDE, LONGITUDE, COUNTY_NAME))
-ncol(stations_sel1)
-
-# remove columns using the - operator (subtract those cols)
-stations_sel2 <- select(stations, -c(LATITUDE:BASIN_NAME, COUNTY_NAME))
-ncol(stations_sel2)
-
-# demo helpers starts_with() and contains()
-stations_sel3 <- select(stations, starts_with("WELL"), contains("NAME"))
-colnames(stations_sel3)
+sac <- st_read("data/shp/sac/sac_county.shp")
 
 
 
-# the pipe operator: chaining dplyr verbs together ------------------------
-
-# pipe means: take left hand side object, and put it into
-# the function on the right hand side as the 1st argument
-stations$WELL_USE %>% table()
-# same thing as
-table(stations$WELL_USE)
-
-# practical example: avoid creating intermedaite variables and reduce code -- SIMPLIFY
-
-# filter
-stations_multcounty1 <- filter(stations, COUNTY_NAME %in% 
-                                 c("Sacramento", "Placer"))
-
-# select
-stations_multcounty2 <- select(stations_multcounty1, 
-                               starts_with("W"), 
-                               contains("NAME"), 
-                               contains("ID"))
-
-# rename the STN_ID to station_id: rename(new_col_name, old_col_name)
-stations_multcounty3 <- rename(stations_multcounty2, station_id = STN_ID)
-
-# do the same thing above with the pipe
-stations_mutcounty <- stations %>% 
-  filter(COUNTY_NAME %in% c("Sacramento", "Placer")) %>% 
-  select(starts_with("W"), contains("NAME"), contains("ID")) %>% 
-  rename(station_id = STN_ID) # rename(new_col_name = old_col_name)
-
-# same as above, extremely hard to read
-rename(select(filter(stations, COUNTY_NAME %in% c("Sacramento", "Placer")), starts_with("W"), contains("NAME"), contains("ID")), station_id = STN_ID)
-
-# sanity check: same dataframe
-nrow(stations_multcounty3) == nrow(stations_mutcounty)
+# Plotting ----------------------------------------------------------------
 
 
-# mutate() creates a new column -------------------------------------------
+# ggplot2 -- built into tidyverse
+library(ggplot2)
+# bonus item -- if its not working, AOK
+# ggplot(sac) + geom_sf()
 
-# convert well depth to meters with mutate() and
-# piping into a ggplot
-stations %>% 
-  mutate(WELL_DEPTH_m = WELL_DEPTH * 0.3048) %>% 
-  ggplot() +
-  geom_point(aes(x = STN_ID, y = WELL_DEPTH), color = "cyan4", alpha = 0.5) +
-  geom_point(aes(x = STN_ID, y = WELL_DEPTH_m), color = "maroon", alpha = 0.5)
+# Create a blank canvas with the base function
+ggplot()
+
+# 3 parts: (1) data, (2)geom (geometric function) = shapes, (3) mappings = x,y but also data driven features
+
+gwl <- read_csv("data/gwl/gwl.csv")
+dim(gwl)
+head(gwl)
+
+# visualize depth to groundwater over time (x = MSMT_DATE, y = GSE_WSE); as a line
+
+# ggplot feature: layers with +
+# can space after the +
+ggplot(data = gwl) + 
+  geom_line(mapping = aes(x = MSMT_DATE, y = GSE_WSE))
+
+ggplot(data = gwl) + # space AFTER
+  geom_line(mapping = aes(x = MSMT_DATE, y = GSE_WSE)) +
+  # don't need to specify arguments if in correct order
+  geom_point(aes(MSMT_DATE, GSE_WSE), alpha = 0.5)
+# alpha is transparency 0-1
 
 
 
-# group by and summarize --------------------------------------------------
-
-# count observations per group
-stations %>% 
-  count(COUNTY_NAME, sort = TRUE)
-
-# plot mean (avg) well depth for the top 10 deepest well counties
-stations %>% 
-  group_by(COUNTY_NAME) %>% 
-  summarise(mean_well_depth = mean(WELL_DEPTH, na.rm = TRUE)) %>% 
-  arrange(desc(mean_well_depth)) %>% 
-  head(10) %>% # take top 10 rows
-  ggplot() +
-  geom_col(aes(x = COUNTY_NAME, y = mean_well_depth))
 
 
-# make it nicer and add all counties
-stations %>% 
-  # group by the county name
-  group_by(COUNTY_NAME) %>% 
-  # calculate the mean well depth
-  summarize(mean_well_depth = mean(WELL_DEPTH, na.rm = TRUE)) %>% 
-  # remove two counties that have NA values
-  filter(!is.na(mean_well_depth)) %>% 
-  # pass to ggplot
-  ggplot() + 
-  geom_col(aes(x = fct_reorder(COUNTY_NAME, mean_well_depth), 
-               y = mean_well_depth)) +
-  labs(title = "Mean well depth", 
-       subtitle = "Periodic groundwater level database", 
-       y = "Mean well depth (ft)",
-       x = "") +
-  coord_flip()
 
-# to write tables
-stations %>% 
-  # group by the county name
-  group_by(COUNTY_NAME) %>% 
-  # calculate the mean well depth
-  summarize(mean_well_depth = mean(WELL_DEPTH, na.rm = TRUE)) %>% 
-  write_csv("data_output/my_summarized_data.csv")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
