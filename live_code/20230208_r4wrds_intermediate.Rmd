@@ -1,0 +1,177 @@
+---
+title: "rmd_live_code"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Live Code!
+
+This is live! **Meaning** anytime we save this file, it will appear online in a plain text format, [**here**](https://dl.dropboxusercontent.com/s/fbcybzmhb7phgph/r4wrds_live_rmd.Rmd?dl=0).
+
+Previous versions can be found [here](https://github.com/r4wrds/discussion/tree/main/live_code).
+
+## Load Libraries We Need
+
+```{r libraries, echo=TRUE}
+
+```
+
+# Let's start spatial R!
+
+Documentation for the package sf is here: https://r-spatial.github.io/sf/index.html
+
+
+# read in shapefiles from sacramento county
+
+
+```{r}
+# to insert an r chunk, control alt i
+
+library(sf)
+library(tidyverse)
+
+# unzip the shapefile folder
+unzip('data/shp/sac_county.zip', exdir = 'data/shp/sac/')
+
+# read in a shapefile
+sac <- st_read('data/shp/sac/sac_county.shp')
+
+# a quick way to see what you're working with
+plot(sac) # look at the file
+st_geometry(sac) %>% plot # look at geometry
+head(sac) # look at the data
+
+names(sac)
+
+```
+
+
+# How do you read in a csv file and make it spatial?
+
+
+```{r}
+# read in groundwater data that is also geolocated
+stations_df <- read_csv('data/gwl/stations_sac.csv')
+stations_df
+
+print(stations_df, width = Inf)
+
+# to convert the df to a sf object
+stations <- st_as_sf(stations_df, # this is the df 
+         coords = c("LONGITUDE", "LATITUDE"), #cols for cords
+         crs = 4269,
+         remove = F) #don't remove lat/long
+class(stations)
+
+
+# what happens if coords is a vector? it also works!
+st_as_sf(stations, # this is the df 
+         coords = c(stations$LONGITUDE, stations$LATITUDE), #cols for cords
+         crs = 4269,
+         remove = F) #don't remove lat/long
+
+# seee what this is
+plot(st_geometry(stations))
+
+```
+
+I want to work with the polygon and points together. 
+
+```{r}
+st_crs(sac)
+st_crs(sac)$epsg # a way to get the espg out
+st_crs(stations)$epsg
+
+# I want these to agree
+st_transform(x = sac, crs = 4269)
+sac <- st_transform(x = sac, crs = st_crs(stations))
+
+
+# read in stations for all of california
+
+all_gw_stations <- read_csv('data/gwl/stations.csv') %>% 
+  st_as_sf(coords = c('LATITUDE', "LONGITUDE"))
+
+plot(st_geometry(all_gw_stations))
+
+```
+
+I want just the staitons in Sacramento county. How can I do that? 
+- filter from the data frame!
+- use the spatial objects!
+
+```{r}
+names(all_gw_stations)
+unique(all_gw_stations$COUNTY_NAME)
+# fiilter the sf dataframe
+stations_sac <- all_gw_stations %>% # control shift m to pipe
+  filter(COUNTY_NAME == 'Sacramento')
+
+
+# use the polygon to filter
+# this is a good resource for spatial data: https://geocompr.robinlovelace.net/geometry-operations.html
+# st_intersection = gives you data where x and y intersect
+
+all_gw_stations <- read_csv('data/gwl/stations.csv') %>% 
+  st_as_sf(coords = c('LONGITUDE', 'LATITUDE'), # remember this is the ordr of coordinates!!!
+           crs = 4269)
+
+# peak at this
+plot(st_geometry(all_gw_stations))
+
+st_crs(sac)$epsg
+
+# transform it
+sac_transformed <- st_transform(sac, st_crs(all_gw_stations))
+
+# now we can do manipulations on the geometry 
+stations_in_sac <- st_intersection(all_gw_stations, sac_transformed)
+
+# another way to filter your data is by indexing
+stations_in_sac2 <- all_gw_stations[sac_transformed,]
+plot(st_geometry(stations_in_sac2))
+
+
+```
+
+
+Another way to plot the data is with ggplot
+
+
+```{r}
+ggplot() + # start a ggplot object
+  geom_sf(data = sac_transformed) + # add polygon
+  geom_sf(data = stations_in_sac2, aes(color = WELL_DEPTH)) + # add points
+  scale_color_viridis_c(begin = .1, end = .8)
+
+
+methods(class = 'sfc')# returns functiosn taht work with objectss of class sfc
+methods(class = 'sf')
+class(sac_transformed)
+
+```
+
+
+You can use mapview to viz spatial and interact with it 
+
+```{r}
+library(mapview)
+
+mapview(sac) +
+  mapview(stations_in_sac2, cex = 5)
+
+```
+
+
+
+
+
+
+
+
+
