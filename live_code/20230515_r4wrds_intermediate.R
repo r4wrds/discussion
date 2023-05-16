@@ -1,4 +1,4 @@
-# 2023-04-17 and 2023-04-19
+# 2023-05-15 and 2023-05-16
 
 # Live Code for R4WRDS Course
 
@@ -249,6 +249,326 @@ animal_list[[7]][1]
 animal_names[7]
 animal_names
 
+
+# DAY 2 (2023-05-16) -------------------
+
+# 2023-05-16
+
+usethis::edit_r_profile(scope = "project")
+
+# for loops:
+
+# for-loop:
+# for(<SYMBOL REPRESENTING INDEX> in <A SEQUENCE OF VALUES>){
+#       run the code inside the curly brackets
+#       as many times as specified in sequence
+#       of values, and use the <SYMBOL REPRESENTING INDEX>
+#       to index from whatever it is you are iterating over
+#}
+
+# lists -- data structures that can hold different items, indexed as listname[[item]]
+
+# reading in multiple csvs
+list.files('data/gwl/county', full.names = T)
+
+# to get the data:
+# downloads the file (data.zip) to your data directory
+download.file("https://github.com/r4wrds/r4wrds-data-intermediate/raw/main/data.zip", destfile = "data/data.zip")
+
+library(tidyverse)
+sacramento <- read_csv("data/gwl/county/Sacramento.csv")
+# don't want to do this 3 or 58 times
+
+# created an empty list to fill up
+files_in <- list.files("data/gwl/county/", full.name = T)
+files_in
+
+# creating an empty list, 'soft coding' the length of the list to match the length of the file names (e.g. not having to write in 3)
+l <- vector('list', length = length(files_in))
+l[[1]]
+
+# seq_along gives us a count range of whatever object we put in
+for(i in seq_along(files_in)){
+  l[[i]] <- read_csv(files_in[i])
+}
+
+# can check the first item in the list
+l[[1]]
+
+# we can bind the data frames together out of the list
+ldf <- bind_rows(l)
+
+# we want to reassign new dfs based on basin name
+ldf
+# double check: is this a data frame like we expect?
+# it is a type of list and a class of data frame and tibble
+typeof(ldf)
+class(ldf)
+
+table(ldf$BASIN_NAME)
+
+# subdivide by basin
+# save csvs by basin in a new directory
+
+# Create a new directory -- if it already exists, gets a warning
+dir.create('data/gwl/basin')
+# Error = stop sign. Code did not run and something is wrong
+# Warning = yield sign. Code ran but there is something to flag
+
+# split up the data frame into basin categories
+l_basin <- split(ldf, ldf$BASIN_NAME)
+
+# paste0 for pasting together text
+# glue is a lot like paste, different syntax
+#install.packages('glue')
+library(glue)
+
+# create a vector of filenames to write out to
+names(l_basin)
+files_out <- glue("data/gwl/basin/{names(l_basin)}.csv")
+files_out
+
+# for loop to actually write the csvs into the basin directory
+for(i in seq_along(files_out)){
+  write_csv(l_basin[[i]], files_out[i])
+}
+
+# [[]] are for lists (nested 1 dimensional) and [] are for vector (or 1 dimensional list)
+# e.g. files_out is 1D
+# it has 1 D, which is a length of 10
+length(files_out)
+lengths(files_out)
+# it has 1 D, which is a length of 10
+length(l_basin)
+# but is has nestedness, so the inner 'lengths' can be different
+lengths(l_basin)
+
+
+
+
+# repeat for loops --------------------------------------------------------
+
+# why loops: because it saves us time and there are some jobs that are so
+# big that we MUST use loops to complete them
+
+# previously used list.files() to return files within a directory. 
+# we can also use dir_ls() to return files in a directory. 
+
+# install.packages("fs")
+
+library(fs)
+library(tidyverse)
+
+# to be a power use of fs, type "dir_" and "file_" and use the dropdown
+# to access the functions you need
+
+# files_in <- list.files("data/gwl/basin/", full.names = TRUE)
+
+# dir_ls() by default reuturn the full name of the file 
+files_in <- dir_ls("data/gwl/basin/")
+
+l <- vector("list", length = length(files_in))
+l # empty list. rooms in a house that we need to fill
+
+# we fill the rooms with data from files_in! 
+
+b1 <- read_csv(files_in[1])
+b2 <- read_csv(files_in[2])
+b3 <- read_csv(files_in[3])
+b4 <- read_csv(files_in[4])
+b5 <- read_csv(files_in[5])
+b6 <- read_csv(files_in[6])
+b7 <- read_csv(files_in[7])
+b8 <- read_csv(files_in[8])
+b9 <- read_csv(files_in[9])
+b10 <- read_csv(files_in[10])
+
+# how to do this with less lines of code? Because this will NOT scale 
+# probably past 100 files. There's a better way!
+
+# cat() stands for "concatenate" which means "combine" and prints whatver
+# is inside to the console. "\n" means "new line" and "\n\n" means 2 new
+# lines. This is useful when printing to the console and adding new lines. 
+# It's like hitting return in a Word processor
+
+for(i in seq_along(files_in)){
+  cat("We are on step", i, "\n")
+  cat("  Reading file:", basename(files_in[i]), "\n\n")
+  l[[i]] <- read_csv(files_in[i])
+}
+
+
+
+# apply() functions, another way to iterate -------------------------------
+
+library(tidyverse)
+library(fs)
+library(glue)
+
+files_in <- dir_ls("data/gwl/basin/")
+
+# we are going to work with lapply(), the "l" in lapply stands for "list"
+# lapply takes a vector or a list as input, and always returns a list as 
+# output. 
+
+# lapply(<vector or a list>, <function to apply across the input>)
+
+# read csvs for each of the 10 basins. turn 5 lines of code (loop) into 1.
+l <- lapply(files_in, read_csv)
+length(l)
+names(l)
+# l$ for tab autocomplete to see your list elements
+l[[1]] # same as l$<name of first list element>
+
+# bind csvs and 
+ldf <- bind_rows(l)
+unique(ldf$BASIN_NAME) # we have 10 unique basin names in this data.frame
+
+# split the dataframe by SITE_CODE
+unique(ldf$SITE_CODE) # 717 unique site codes
+ldf <- split(ldf, ldf$SITE_CODE)
+ldf[[1]]
+length(ldf)
+names(ldf)
+
+# write to csv with apply
+
+# need paths to write to
+files_out <- glue("data/gwl/site_code/{names(ldf)}.csv")
+dir_create("data/gwl/site_code")
+# mapply ("m" stands for multiple apply)
+# mapply(<function>, arguments)
+mapply(write_csv, ldf, files_out)
+
+
+
+# map() - a third an final way to iterate ---------------------------------
+
+# map synax:
+# map(<vector or list to map over>, ~function(.x))
+# ~ is the start of the function
+# .x is where you would put i if writing a loop
+
+library(tidyverse)
+library(fs)
+library(glue)
+
+# define files in to read
+files_in <- dir_ls("data/gwl/basin/")
+
+# read the files with map()
+l <- map(files_in, ~read_csv(.x))
+
+# bind rows
+ldf <- bind_rows(l)
+
+# split by site cod using group_split
+ldf <- split(ldf, ldf$SITE_CODE)   # base R
+# ldf <- group_split(ldf, SITE_CODE) # tidyverse way
+names(ldf)
+
+# write the ldf list of dataframes to csv files in files_out
+files_out <- glue("data/gwl/site_code/{names(ldf)}.csv")
+# walk2(<list or vector 1>, <list of vector 2>, ~function(.x, .y))
+# .x refers to list or vector 1
+# .y refers to list or vector 2
+
+walk2(ldf, files_out, ~write_csv(.x, .y)) # silent: does not print
+map2(ldf, files_out, ~write_csv(.x, .y))  # verbose: prints to console
+
+# same as...
+# write_csv(ldf[[1]], files_out[1])
+# write_csv(ldf[[2]], files_out[2])
+# write_csv(ldf[[3]], files_out[3])
+# ...
+# write_csv(ldf[[717]], files_out[717])
+
+
+
+# piping ------------------------------------------------------------------
+
+df <- read_csv(dir_ls("data/gwl/basin/"))
+
+# why pipe? We read in English, from left to right. 
+
+# tell me which of the equivalent statements is easier to read
+class(length(unique(df$BASIN_NAME))) # nesting
+df$BASIN_NAME %>% unique() %>% length() %>% class() # piping
+
+# %>% = "then do this"
+
+
+# piping with map ---------------------------------------------------------
+
+
+library(tidyverse)
+library(fs)
+library(glue)
+
+# define files in to read
+files_in  <- dir_ls("data/gwl/basin/")
+files_out <- glue("data/gwl/basin2/{basename(files_in)}")
+
+dir_create("data/gwl/basin2")
+# read in 10 files, bind into 1 dataframe, split into 717 site code
+# dataframes in a list, then write 717 site code dataframes. In 3 lines of code. 
+
+# map_df() same as map() %>% bind_rows() same as bind_rows(map())
+map_df(files_in, ~read_csv(.x)) %>% 
+  group_split(BASIN_NAME) %>% 
+  # <add a new column to the dataframe> %>% # we can add more steps in here
+  # <fit a liner model> %>% 
+  walk2(files_out, ~write_csv(.x, .y))
+
+# Mapmaking and spatial data --------------------------
+# https://www.r4wrds.com/intermediate/m_advanced_spatial.html
+
+# GENERAL PACKAGES
+library(tidyverse) # data wrangling & viz
+library(purrr) # iteration
+library(janitor) # name cleaning
+library(glue) # pasting stuff together
+
+# SPATIAL PACKAGES
+library(sf) # analysis tools
+library(mapview)  # interactive maps!
+mapviewOptions(fgb = FALSE) # to save interactive maps
+
+
+# a new package with spatial boundary data for the US
+# there are many (see tidycensus or rnaturalearth)
+install.packages("tigris")
+library(tigris)
+
+# get sf CA boundary...note we need to filter to CA
+ca <- states(cb=TRUE) %>% 
+  dplyr::filter(STUSPS == "CA")
+
+# get sf object of counties for CA
+ca_co <- counties("CA", cb = TRUE)
+
+# reading in a shape file our data
+sac_co <- st_read("data/shp/sac_county_shp/sac_county.shp")
+
+# coord ref system -- what is this? tablecloth vs. orange peel analogy (flat vs spherical) with different precision of measurements at different areas
+st_crs(sac_co)$epsg
+st_crs(ca_co)$epsg
+
+# make sure these crs match between the data
+sac_co <- st_transform(sac_co, st_crs(ca_co))
+st_crs(sac_co) == st_crs(ca_co)
+
+# read in groundwater data monitoring
+gw_sac <- read_csv('data/gwl/county/Sacramento.csv')
+str(gw_sac)
+
+?st_as_sf
+gw_sac <- st_as_sf(gw_sac, coords = c("LONGITUDE", "LATITUDE"), crs = 4326, remove = FALSE) %>% 
+  st_transform(., st_crs(ca_co))
+
+mapview(sac_co, legend = FALSE) +
+  mapview(gw_sac, layer.name = "GW Stations")
+?read.csv2
 
 
 
