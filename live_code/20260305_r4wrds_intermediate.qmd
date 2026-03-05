@@ -7,6 +7,17 @@ params:
   county: Sacramento
 ---
 
+```{r livecode, echo=FALSE}
+# this is live code, accessible here:
+# refresh browser to see updates:
+# https://dl.dropboxusercontent.com/s/fbcybzmhb7phgph/r4wrds_live_qmd.qmd?dl=0
+
+# all code will be permanently archived here:
+# https://github.com/r4wrds/discussion/tree/main/live_code
+
+```
+
+
 # `r paste(params$county, 'Groundwater Levels')`
 
 <br>
